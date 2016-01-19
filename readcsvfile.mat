@@ -1,0 +1,1 @@
+data = readtable('train.csv','Delimiter',' ','ReadVariableNames',false);
