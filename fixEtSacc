@@ -30,9 +30,6 @@ durations = fixationArray(:,3:3:end);
 % Now we can get rid of NaN
 saccadeArray(isnan(saccadeArray))=0;
 
-%Sum all saccades in a recording
-saccadeSum = sum(saccadeArray,2);
-
 %Empty matrix for computed values
 values = zeros(numsubjects,12);
 
