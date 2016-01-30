@@ -1,0 +1,130 @@
+clear;
+fixt = readtable('train_fixations.csv', 'Delimiter', ',', 'ReadVariableNames', false);
+numsubjects = 34;
+
+% Make array out of the numerical values
+fixationArray = table2array(fixt(:,3:end));
+
+% Initialize NaN-filled matrix for saccades (to avoid misinterpreting 0)
+sf = size(fixationArray);
+saccadeArray = NaN([sf(1), ((3+sf(2)) / 3)-1], 'like', fixationArray);
+% Euclidean distance function for saccade amplitudes
+edist = @(x1,y1, x2,y2) sqrt((x2-x1)^2 + (y2-y1)^2);
+
+numfixations = zeros(sf(1),1);
+% Compute saccade amplitudes
+for i = 1:sf(1)
+    for j = 1:3:(sf(2)-3)
+        saccadeArray(i,(j+2)/3) = edist(fixationArray(i, j), fixationArray(i,j+1), fixationArray(i,j+3), fixationArray(i,j+4));
+    end
+    % Count number of fixations
+    for j = 3:3:(sf(2))
+        if(~isnan(fixationArray(i,j)))
+            %durations(i) = durations(i) + fixationArray(i,j);
+            numfixations(i) = 1+numfixations(i);
+        end
+    end
+end
+
+durations = fixationArray(:,3:3:end);
+% Now we can get rid of NaN
+saccadeArray(isnan(saccadeArray))=0;
+
+%Sum all saccades in a recording
+saccadeSum = sum(saccadeArray,2);
+
+%Empty matrix for computed values
+values = zeros(numsubjects,12);
+
+%True MSA & True MFD
+for i = 1:numsubjects
+    %Find rows matching subject
+    slogical = strcmp(fixt.Var1,strcat('s',int2str(i)));
+    %Find rows with 'true'
+    tlogical = strcmp(fixt.Var2, 'true');
+    %Combine
+	[index,~] = find(slogical & tlogical);
+    
+    %Get all durations of same subject on a single vector
+    temp = durations(index,:);
+    durationsForI = [];
+    for j = 1:size(temp,1)
+        durationsForI = horzcat(durationsForI,temp(j,1:numfixations(index(j))));
+    end
+    %Similarly for saccades
+    temp = saccadeArray(index,:);
+    saccadesForI = [];
+    for j = 1:size(temp,1)
+        saccadesForI = horzcat(saccadesForI,temp(j,1:numfixations(index(j))));
+    end
+    
+    %MFD
+    values(i,1) = mean(durationsForI);
+    %Standard deviation
+    values(i,2) = std(durationsForI);
+    %MSA
+    values(i,7) = mean(saccadesForI);
+    %Standard deviation
+    values(i,8) = std(saccadesForI);
+end
+
+%False MSA
+%Done similarly as above
+for i = 1:numsubjects
+    slogical = strcmp(fixt.Var1,strcat('s',int2str(i)));
+    tlogical = strcmp(fixt.Var2, 'false');
+	[index,~] = find(slogical & tlogical);
+    
+    temp = durations(index,:);
+    durationsForI = [];
+    for j = 1:size(temp,1)
+        durationsForI = horzcat(durationsForI,temp(j,1:numfixations(index(j))));
+    end
+    temp = saccadeArray(index,:);
+    saccadesForI = [];
+    for j = 1:size(temp,1)
+        saccadesForI = horzcat(saccadesForI,temp(j,1:numfixations(index(j))));
+    end
+
+    values(i,3) = mean(durationsForI);
+    values(i,4) = std(durationsForI);
+    values(i,9) = mean(saccadesForI);
+    values(i,10) = std(saccadesForI);
+end
+
+%Overall MSA
+for i = 1:numsubjects
+    slogical = strcmp(fixt.Var1,strcat('s',int2str(i)));
+    [index,~] = find(slogical);
+    
+    temp = durations(index,:);
+    durationsForI = [];
+    for j = 1:size(temp,1)
+        durationsForI = horzcat(durationsForI,temp(j,1:numfixations(index(j))));
+    end
+    temp = saccadeArray(index,:);
+    saccadesForI = [];
+    for j = 1:size(temp,1)
+        saccadesForI = horzcat(saccadesForI,temp(j,1:numfixations(index(j))));
+    end
+
+    values(i,5) = mean(durationsForI);
+    values(i,6) = std(durationsForI);
+    values(i,11) = mean(saccadesForI);
+    values(i,12) = std(saccadesForI);
+end
+
+subjectsToExport = [1,11,21,5,15,25]';
+subjectIDs = arrayfun(@int2str, subjectsToExport, 'UniformOutput', false);
+subjectIDs = arrayfun(@strcat, ['s','s','s','s','s','s']', subjectIDs);
+T = table(subjectIDs, values(subjectsToExport, 1),...
+    values(subjectsToExport, 2),values(subjectsToExport, 3),...
+    values(subjectsToExport, 4),values(subjectsToExport, 5),...
+    values(subjectsToExport, 6),values(subjectsToExport, 7),...
+    values(subjectsToExport, 8),values(subjectsToExport, 9),...
+    values(subjectsToExport, 10),values(subjectsToExport, 11),...
+    values(subjectsToExport, 12),...
+    'VariableNames', {'subject_id', 'MFD_true','MFD_SD_true', 'MFD_false',...
+    'MFD_SD_false', 'MFD_overall', 'MFD_SD_overall', 'MSA_true',...
+    'MSA_SD_true', 'MSA_false', 'MSA_SD_false', 'MSA_overall','MSA_SD_overall'});
+writetable(T,'MFD_AND_MSA_DATA.csv');
