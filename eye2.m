@@ -249,6 +249,82 @@ for i=1:size(cellA)
     end;
 end;
 
+%This algortihm calculates saccades
+numsubjects = 34;
+
+% Make array out of numerical values
+fixa = table2array(data(:,3:end));
+
+% Initialize NaN-filled matrix for saccades (to avoid misinterpreting 0) 
+sf = size(fixa);
+saca = NaN([sf(1), ((3+sf(2)) / 6)-1], 'like', fixa);
+
+% Euclidean distance function for saccade amplitudes
+edist = @(x1,y1, x2,y2) sqrt((x2-x1)^2 + (y2-y1)^2);
+
+% Compute saccade amplitudes
+for i = 1:sf(1)
+    for j = 1:6:(sf(2)-3)
+        saca(i,(j+5)/6) = edist(fixa(i, j), fixa(i,j+1), fixa(i,j+3), fixa(i,j+4));
+    end
+end
+
+% Compute numbers of saccades by finding first NaN
+for i = 1:size(saca,1)
+    nans = find(isnan(saca(i,:)));
+    if(isempty(nans))
+        numsaccades(i) = size(saca,1);
+    else
+        nanindex = min(nans);
+        numsaccades(i) = nanindex-1;
+    end
+end
+numsaccades = numsaccades';
+
+% Now we can get rid of NaN
+saca(isnan(saca))=0;
+
+%Sum all saccades in a recording
+saccsum = sum(saca,2);
+
+%Empty matrix for computed values
+saccvalues = zeros(numsubjects,6);
+
+%True MSA
+for i = 1:numsubjects
+    %Find rows matching subject
+    slogical = strcmp(data.Var1,strcat('s',int2str(i)));
+    %Find rows with 'true'
+    tlogical = strcmp(data.Var2, 'true');
+    %Combine
+	[index,~] = find(slogical & tlogical);
+    %Mean
+    saccvalues(i,1) = sum(saccsum(index));
+    saccvalues(i,1) = saccvalues(i,1)/sum(numsaccades(index));
+    %Standard deviation
+    saccvalues(i,2) = sqrt(sum(saccsum(index)-saccvalues(i,1))/sum(numsaccades(index)));
+end
+
+%False MSA
+%Done similarly as above
+for i = 1:numsubjects
+    slogical = strcmp(data.Var1,strcat('s',int2str(i)));
+    tlogical = strcmp(data.Var2, 'false');
+	[index,~] = find(slogical & tlogical);
+    saccvalues(i,3) = sum(saccsum(index));
+    saccvalues(i,3) = saccvalues(i,3)/sum(numsaccades(index));
+     saccvalues(i,4) = sqrt(sum(saccsum(index)-saccvalues(i,3))/sum(numsaccades(index)));
+end
+
+%Overall MSA
+for i = 1:numsubjects
+    slogical = strcmp(data.Var1,strcat('s',int2str(i)));
+    [sindex,~] = find(slogical);
+    saccvalues(i,5) = sum(saccsum(sindex));
+    saccvalues(i,5) = saccvalues(i,5)/sum(numsaccades(sindex));
+    saccvalues(i,6) = sqrt(sum(saccsum(sindex)-saccvalues(i,5))/sum(numsaccades(sindex)));
+end
+
 s1durationsOverall = cat(2, s1durationsTrue(2:end), s1durationsFalse(2:end));
 s1durationsOverallTotal = sum(cell2mat(s1durationsOverall(2:end)));
 s1OverallMFD = s1durationsOverallTotal / size(s1durationsOverall, 2);
@@ -286,5 +362,16 @@ MFD_overall = [s1OverallMFD; s11OverallMFD; s21OverallMFD; s5OverallMFD; s15Over
 MFD_SD_true = [s1SDTrueMFD; s11SDTrueMFD; s21SDTrueMFD; s5SDTrueMFD; s15SDTrueMFD; s25SDTrueMFD];
 MFD_SD_false = [s1SDFalseMFD; s11SDFalseMFD; s21SDFalseMFD; s5SDFalseMFD; s15SDFalseMFD; s25SDFalseMFD];
 MFD_overall_SD = [s1SDOverallMFD; s11SDOverallMFD; s21SDOverallMFD; s5SDOverallMFD; s15SDOverallMFD; s25SDOverallMFD];
-writeableTable = table(subject_id, MFD_true, MFD_false, MFD_overall, MFD_SD_true, MFD_SD_false, MFD_overall_SD);
-writetable(writeableTable, 'MFDDATA.csv');
+ 
+subject_id_int = [1;11;21;5;15;25];
+subjects_saccvalues = saccvalues(subject_id_int,:);
+MSA_true = subjects_saccvalues(:,1);
+ MSA_SD_true = subjects_saccvalues(:,2); 
+ MSA_false = subjects_saccvalues(:,3);
+ MSA_SD_false = subjects_saccvalues(:,4);
+ MSA_overall = subjects_saccvalues(:,5); 
+ MSA_overall_SD = subjects_saccvalues(:,6);
+
+writeableTable = table(subject_id, MFD_true, MFD_SD_true, MFD_false, MFD_SD_false, MFD_overall, MFD_overall_SD, ...
+    MSA_true, MSA_SD_true,MSA_false,MSA_SD_false,MSA_overall,MSA_overall_SD);
+writetable(writeableTable, 'MFD_AND_MSA_DATA.csv');
